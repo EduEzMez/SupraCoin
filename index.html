@@ -71,6 +71,11 @@
             font-size: 1.2em;
             margin: 10px 0;
         }
+        #version {
+            font-size: 0.8em;
+            color: #cccccc;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -86,45 +91,53 @@
         <canvas id="priceChart"></canvas>
     </div>
     <button id="refresh">Actualizar Ahora</button>
+    <p id="version">v0.2</p>
 
     <script>
         let chart;
         let historicalData = [];
         let currentSignal = '';
-        const interval = 'hourly'; // Datos horarios para simular velas
-        const limit = 48; // Últimas 48 horas
         const atrPeriod = 14;
         const rsiPeriod = 14;
         const fibLevels = [0, 0.236, 0.382, 0.5, 0.618, 1];
 
         async function fetchData() {
             try {
-                // Obtener datos históricos de CoinGecko (precios horarios de Supra)
-                const response = await fetch(
-                    `https://api.coingecko.com/api/v3/coins/supra-oracles/history?vs_currency=usd&days=2&interval=hourly`
-                );
-                const data = await response.json();
-                if (!data.market_data || !data.market_data.current_price) {
-                    throw new Error('No se encontraron datos de mercado para Supra');
+                // Obtener precio actual de Supra usando CoinGecko con ID correcto 'supra'
+                const currentResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=supra&vs_currencies=usd');
+                const currentData = await currentResponse.json();
+                if (!currentData.supra || !currentData.supra.usd) {
+                    throw new Error('No se encontró el precio actual para Supra en CoinGecko');
+                }
+                const currentPrice = currentData.supra.usd;
+
+                // Obtener datos históricos de los últimos 7 días (horarios)
+                const historicalResponse = await fetch('https://api.coingecko.com/api/v3/coins/supra/market_chart?vs_currency=usd&days=7&interval=hourly');
+                const historicalJson = await historicalResponse.json();
+                if (!historicalJson.prices || historicalJson.prices.length === 0) {
+                    throw new Error('No se encontraron datos históricos para Supra');
                 }
 
-                // Simular datos OHLC basados en precios horarios
-                historicalData = Array(limit).fill().map((_, i) => {
-                    const price = data.market_data.current_price.usd * (1 + (Math.random() - 0.5) * 0.01); // Simular fluctuaciones
-                    const high = price * 1.005;
-                    const low = price * 0.995;
-                    const volume = 100000 + Math.random() * 50000; // Volumen simulado
+                // Construir datos OHLC simulados basados en precios históricos
+                historicalData = historicalJson.prices.map((priceData, index) => {
+                    const timestamp = new Date(priceData[0]);
+                    const basePrice = priceData[1];
+                    // Simular OHLC con pequeñas variaciones para análisis técnico
+                    const open = basePrice;
+                    const high = open * (1 + Math.random() * 0.005);
+                    const low = open * (1 - Math.random() * 0.005);
+                    const close = open + (Math.random() - 0.5) * (high - low);
+                    const volume = 1000000 + Math.random() * 5000000; // Volumen simulado
                     return {
-                        timestamp: new Date(Date.now() - (limit - i) * 3600 * 1000),
-                        open: price,
+                        timestamp: timestamp,
+                        open: open,
                         high: high,
                         low: low,
-                        close: price * (1 + (Math.random() - 0.5) * 0.005),
+                        close: close,
                         volume: volume
                     };
                 });
 
-                const currentPrice = historicalData[historicalData.length - 1].close;
                 document.getElementById('price').innerText = `Precio actual: $${currentPrice.toFixed(6)} USD`;
                 document.getElementById('error').innerText = '';
 
@@ -143,12 +156,13 @@
                 const volumeTrend = recentVolumeAvg > prevVolumeAvg ? 'Aumentando (Bullish)' : 'Disminuyendo (Bearish)';
                 document.getElementById('volume-trend').innerText = `Tendencia de Volumen: ${volumeTrend}`;
 
-                // Niveles Fibonacci
-                const recentHigh = Math.max(...historicalData.slice(-24).map(d => d.high)); // Últimas 24 horas
-                const recentLow = Math.min(...historicalData.slice(-24).map(d => d.low));
+                // Niveles Fibonacci basados en high/low de los últimos 24 datos (~24 horas)
+                const recentData = historicalData.slice(-24);
+                const recentHigh = Math.max(...recentData.map(d => d.high));
+                const recentLow = Math.min(...recentData.map(d => d.low));
                 const fib = calculateFibLevels(recentHigh, recentLow);
 
-                // Lógica de señal
+                // Lógica de señal usando precio actual
                 let signal = 'MANTENER';
                 let advice = '';
                 if (lastRSI < 30 && currentPrice > fib[0.618]) {
@@ -170,12 +184,12 @@
                 // Notificación
                 if (signal !== currentSignal && signal !== 'MANTENER') {
                     alert(`¡Señal de ${signal}! ${advice}`);
-                    // Para sonido: new Audio('alert.mp3').play(); (requiere archivo local alert.mp3)
+                    // Para sonido: new Audio('alert.mp3').play(); (requiere archivo local)
                 }
                 currentSignal = signal;
 
-                // Actualizar gráfico
-                updateChart(historicalData, fib);
+                // Actualizar gráfico con datos históricos
+                updateChart(historicalData, fib, currentPrice);
 
             } catch (error) {
                 console.error(error);
@@ -185,6 +199,7 @@
         }
 
         function calculateATR(data, period) {
+            if (data.length < period + 1) return [0]; // Datos insuficientes
             const tr = [];
             for (let i = 1; i < data.length; i++) {
                 const highLow = data[i].high - data[i].low;
@@ -202,6 +217,7 @@
         }
 
         function calculateRSI(closes, period) {
+            if (closes.length < period + 1) return [50]; // Neutral si datos insuficientes
             const gains = [], losses = [];
             for (let i = 1; i < closes.length; i++) {
                 const diff = closes[i] - closes[i - 1];
@@ -210,12 +226,14 @@
             let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
             let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
             let rs = avgLoss ? avgGain / avgLoss : Infinity;
-            const rsiArray = new Array(closes.length - gains.length - 1).fill(0).concat([100 - 100 / (1 + rs)]);
+            let rsiValue = 100 - 100 / (1 + rs);
+            const rsiArray = new Array(closes.length - gains.length - 1).fill(50).concat([rsiValue]);
             for (let i = period; i < gains.length; i++) {
                 avgGain = (avgGain * (period - 1) + (gains[i] || 0)) / period;
                 avgLoss = (avgLoss * (period - 1) + (losses[i] || 0)) / period;
                 rs = avgLoss ? avgGain / avgLoss : Infinity;
-                rsiArray.push(100 - 100 / (1 + rs));
+                rsiValue = 100 - 100 / (1 + rs);
+                rsiArray.push(rsiValue);
             }
             return rsiArray;
         }
@@ -228,8 +246,8 @@
             }, {});
         }
 
-        function updateChart(data, fib) {
-            const labels = data.map(d => d.timestamp.toLocaleTimeString());
+        function updateChart(data, fib, currentPrice) {
+            const labels = data.map(d => d.timestamp.toLocaleString('es-ES', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }));
             const prices = data.map(d => d.close);
 
             if (!chart) {
@@ -239,7 +257,7 @@
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'Precio SUPRA',
+                            label: 'Precio SUPRA (USD)',
                             data: prices,
                             borderColor: '#6a00ff',
                             backgroundColor: 'rgba(106, 0, 255, 0.1)',
@@ -260,7 +278,7 @@
                                     borderColor: '#00ff00',
                                     borderWidth: 1,
                                     label: {
-                                        content: `${(level * 100).toFixed(1)}%`,
+                                        content: `${(level * 100).toFixed(1)}% Fib`,
                                         enabled: true,
                                         position: 'start'
                                     }
@@ -279,7 +297,7 @@
                     borderColor: '#00ff00',
                     borderWidth: 1,
                     label: {
-                        content: `${(level * 100).toFixed(1)}%`,
+                        content: `${(level * 100).toFixed(1)}% Fib`,
                         enabled: true,
                         position: 'start'
                     }
@@ -294,6 +312,6 @@
 
         document.getElementById('refresh').addEventListener('click', fetchData);
     </script>
-    <p>0.2</p>
+    <p>0.3</p>
 </body>
 </html>
