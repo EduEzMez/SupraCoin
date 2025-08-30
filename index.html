@@ -1,317 +1,522 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Análisis de Supra</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.1"></script>
-    <style>
-        body {
-            background-color: #000000; /* Fondo oscuro inspirado en Supra */
-            color: #ffffff;
-            font-family: 'Arial', sans-serif;
-            margin: 0;
-            padding: 20px;
-            text-align: center;
-        }
-        h1 {
-            color: #ffffff;
-            font-size: 2.5em;
-        }
-        #signal {
-            font-size: 2em;
-            font-weight: bold;
-            margin: 20px 0;
-        }
-        .buy {
-            color: #00ff00; /* Verde para comprar */
-        }
-        .sell {
-            color: #ff0000; /* Rojo para vender */
-        }
-        #price {
-            font-size: 1.5em;
-            margin: 10px 0;
-        }
-        #advice {
-            font-size: 1.2em;
-            margin: 20px 0;
-            max-width: 800px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        #rsi, #atr, #volume-trend {
-            font-size: 1.1em;
-            margin: 10px 0;
-        }
-        #chart-container {
-            max-width: 800px;
-            margin: 20px auto;
-            background-color: #1a1a1a;
-            padding: 20px;
-            border-radius: 10px;
-        }
-        button {
-            background-color: #6a00ff; /* Morado de Supra */
-            color: #ffffff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 1em;
-            margin: 10px;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #8b3aff;
-        }
-        #error {
-            color: #ff4444;
-            font-size: 1.2em;
-            margin: 10px 0;
-        }
-        #version {
-            font-size: 0.8em;
-            color: #cccccc;
-            margin-top: 20px;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Supra Buy/Sell Dashboard</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg: #0a0b10;           /* fondo oscuro */
+      --panel: #121320;        /* paneles */
+      --muted: #8b8fa3;        /* texto secundario */
+      --text: #e6e8ff;         /* texto principal */
+      --primary: #e21b4a;      /* rosa Supra */
+      --primary-700:#b0153a;
+      --accent: #ff4f7b;       /* gradiente */
+      --success:#38d39f;
+      --warn:#ffb020;
+      --danger:#ff5b5b;
+      --card-radius: 18px;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background: radial-gradient(1200px 800px at 85% -10%, rgba(226,27,74,.15), transparent 60%),
+      radial-gradient(800px 600px at 10% 10%, rgba(255,79,123,.12), transparent 60%), var(--bg);
+      color:var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      letter-spacing:.2px;
+    }
+    header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:20px clamp(16px, 4vw, 40px);
+      position:sticky; top:0; z-index:50; backdrop-filter: saturate(140%) blur(8px);
+      background: linear-gradient(180deg, rgba(10,11,16,.75), rgba(10,11,16,.45));
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .brand{display:flex; align-items:center; gap:12px; font-weight:700; font-size:clamp(18px, 1.6vw, 22px)}
+    .logo{
+      width:34px; height:34px; border-radius:10px; box-shadow:0 6px 20px rgba(226,27,74,.35);
+      background: conic-gradient(from 180deg at 50% 50%, var(--primary), var(--accent), var(--primary));
+    }
+    .wrap{max-width:1200px; margin:0 auto; padding: 18px clamp(16px, 4vw, 40px) 42px;}
+    .grid{
+      display:grid; gap:18px; grid-template-columns: 1.2fr .8fr; align-items:start;
+    }
+    @media (max-width: 980px){ .grid{grid-template-columns: 1fr;}}
+
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00));
+      border:1px solid rgba(255,255,255,.06); border-radius: var(--card-radius); box-shadow:var(--shadow);
+    }
+    .card-body{padding:18px}
+    .title{font-size: clamp(16px, 1.5vw, 18px); color:#fff; opacity:.9}
+
+    .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+    .controls .field{display:flex; flex-direction:column; gap:6px; min-width:150px}
+
+    select,input{
+      background: #0f101a; border:1px solid rgba(255,255,255,.08); color:var(--text);
+      padding:10px 12px; border-radius:12px; outline:none; box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .btn{
+      appearance:none; border:none; color:#fff; cursor:pointer; font-weight:600;
+      padding:12px 16px; border-radius: 999px; letter-spacing:.3px; transition: transform .08s ease, box-shadow .2s ease;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      box-shadow: 0 8px 24px rgba(226,27,74,.4);
+    }
+    .btn:hover{transform: translateY(-1px)}
+    .btn.secondary{background:#1b1d2e; box-shadow:none; border:1px solid rgba(255,255,255,.08)}
+    .btn.ghost{background:transparent; border:1px dashed rgba(255,255,255,.2)}
+
+    .pill{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; font-size:12px; font-weight:700; letter-spacing:.4px}
+    .pill.buy{background:rgba(56,211,159,.15); color:var(--success); border:1px solid rgba(56,211,159,.35)}
+    .pill.sell{background:rgba(255,91,91,.13); color:var(--danger); border:1px solid rgba(255,91,91,.38)}
+    .pill.wait{background:rgba(255,176,32,.12); color:var(--warn); border:1px solid rgba(255,176,32,.35)}
+
+    .kpis{display:grid; grid-template-columns: repeat(3, 1fr); gap:12px}
+    @media (max-width:760px){.kpis{grid-template-columns:1fr}}
+    .kpi{padding:14px; border-radius:14px; background:#0f101a; border:1px solid rgba(255,255,255,.06)}
+    .kpi .v{font-size: clamp(20px, 2.4vw, 28px); font-weight:800}
+    .kpi .l{opacity:.7; font-size:12px}
+
+    .footer{opacity:.6; font-size:12px; padding-top:10px}
+    .small{font-size:12px; opacity:.9}
+    .row{display:flex; align-items:center; justify-content:space-between; gap:10px}
+    .mt12{margin-top:12px}.mt16{margin-top:16px}.mt20{margin-top:20px}.mt8{margin-top:8px}
+
+    .hint{font-size:12px; opacity:.7}
+    .badge{display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; background:#101225; border:1px solid rgba(255,255,255,.06)}
+
+    canvas{width:100%!important; height:420px!important}
+
+    .legend-dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle}
+  </style>
 </head>
 <body>
-    <h1>Análisis de Supra</h1>
-    <div id="signal">Cargando datos...</div>
-    <div id="price"></div>
-    <div id="error"></div>
-    <div id="advice"></div>
-    <div id="rsi"></div>
-    <div id="atr"></div>
-    <div id="volume-trend"></div>
-    <div id="chart-container">
-        <canvas id="priceChart"></canvas>
+  <header>
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>Supra Buy/Sell <span class="small" style="opacity:.65">demo analítica</span></div>
     </div>
-    <button id="refresh">Actualizar Ahora</button>
-    <p id="version">v0.2</p>
+    <div class="badge" id="modeBadge">Modo: <strong>Tiempo real</strong></div>
+  </header>
 
-    <script>
-        let chart;
-        let historicalData = [];
-        let currentSignal = '';
-        const atrPeriod = 14;
-        const rsiPeriod = 14;
-        const fibLevels = [0, 0.236, 0.382, 0.5, 0.618, 1];
+  <main class="wrap">
+    <section class="grid">
+      <!-- IZQUIERDA: CHART + KPIs -->
+      <div class="card">
+        <div class="card-body">
+          <div class="row">
+            <div class="title">Precio y niveles técnicos</div>
+            <div id="signalPill" class="pill wait">ESPERAR</div>
+          </div>
 
-        async function fetchData() {
-            try {
-                // Obtener precio actual de Supra usando CoinGecko con ID correcto 'supra'
-                const currentResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=supra&vs_currencies=usd');
-                const currentData = await currentResponse.json();
-                if (!currentData.supra || !currentData.supra.usd) {
-                    throw new Error('No se encontró el precio actual para Supra en CoinGecko');
-                }
-                const currentPrice = currentData.supra.usd;
+          <div class="kpis mt12">
+            <div class="kpi">
+              <div class="l">Precio actual (USD)</div>
+              <div id="price" class="v">—</div>
+            </div>
+            <div class="kpi">
+              <div class="l">Cambio 60m</div>
+              <div id="chg" class="v">—</div>
+            </div>
+            <div class="kpi">
+              <div class="l">ATR(14)</div>
+              <div id="atr" class="v">—</div>
+            </div>
+          </div>
 
-                // Obtener datos históricos de los últimos 7 días (horarios)
-                const historicalResponse = await fetch('https://api.coingecko.com/api/v3/coins/supra/market_chart?vs_currency=usd&days=7&interval=hourly');
-                const historicalJson = await historicalResponse.json();
-                if (!historicalJson.prices || historicalJson.prices.length === 0) {
-                    throw new Error('No se encontraron datos históricos para Supra');
-                }
+          <canvas id="priceChart" class="mt16"></canvas>
 
-                // Construir datos OHLC simulados basados en precios históricos
-                historicalData = historicalJson.prices.map((priceData, index) => {
-                    const timestamp = new Date(priceData[0]);
-                    const basePrice = priceData[1];
-                    // Simular OHLC con pequeñas variaciones para análisis técnico
-                    const open = basePrice;
-                    const high = open * (1 + Math.random() * 0.005);
-                    const low = open * (1 - Math.random() * 0.005);
-                    const close = open + (Math.random() - 0.5) * (high - low);
-                    const volume = 1000000 + Math.random() * 5000000; // Volumen simulado
-                    return {
-                        timestamp: timestamp,
-                        open: open,
-                        high: high,
-                        low: low,
-                        close: close,
-                        volume: volume
-                    };
-                });
+          <div class="row mt16">
+            <div class="hint">Niveles Fibonacci: <span id="fibLevels">—</span></div>
+            <div class="small" id="lastUpdate">—</div>
+          </div>
+        </div>
+      </div>
 
-                document.getElementById('price').innerText = `Precio actual: $${currentPrice.toFixed(6)} USD`;
-                document.getElementById('error').innerText = '';
+      <!-- DERECHA: CONTROLES -->
+      <div class="card">
+        <div class="card-body">
+          <div class="title">Controles</div>
+          <div class="controls mt12">
+            <div class="field" style="min-width:180px">
+              <label class="small">Proveedor de precio</label>
+              <select id="provider">
+                <option value="coingecko">CoinGecko (simple price)</option>
+                <option value="coingecko_markets">CoinGecko (markets)</option>
+                <option value="simulate">Simulado (random walk)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="small">ID CoinGecko</label>
+              <input id="assetId" value="supra" />
+              <span class="hint">Si no funciona, probar otro ID (p. ej. "supra-token" si existe).</span>
+            </div>
+            <div class="field" style="min-width:120px">
+              <label class="small">Moneda</label>
+              <select id="fiat">
+                <option value="usd" selected>USD</option>
+                <option value="ars">ARS</option>
+                <option value="eur">EUR</option>
+              </select>
+            </div>
+          </div>
 
-                // Calcular indicadores
-                const atr = calculateATR(historicalData, atrPeriod);
-                const lastATR = atr[atr.length - 1];
-                document.getElementById('atr').innerText = `ATR (14): ${lastATR.toFixed(6)} (Medida de volatilidad)`;
+          <div class="row mt16">
+            <button class="btn" id="startBtn">Iniciar</button>
+            <button class="btn secondary" id="stopBtn">Detener</button>
+            <button class="btn ghost" id="resetBtn">Reset Datos</button>
+          </div>
 
-                const rsi = calculateRSI(historicalData.map(d => d.close), rsiPeriod);
-                const lastRSI = rsi[rsi.length - 1];
-                document.getElementById('rsi').innerText = `RSI (14): ${lastRSI.toFixed(2)} (Sobrevendido si <30, Sobrecomprado si >70)`;
+          <div class="mt16">
+            <div class="title" style="font-size:15px">Parámetros del análisis</div>
+            <div class="controls mt12">
+              <div class="field"><label class="small">SMA corta</label><input id="smaShort" type="number" value="5" min="2"/></div>
+              <div class="field"><label class="small">SMA larga</label><input id="smaLong" type="number" value="20" min="3"/></div>
+              <div class="field"><label class="small">Ventana swing (min)</label><input id="fibWindow" type="number" value="60" min="10"/></div>
+              <div class="field"><label class="small">ATR períodos</label><input id="atrLen" type="number" value="14" min="5"/></div>
+            </div>
+          </div>
 
-                // Tendencia de volumen
-                const recentVolumeAvg = historicalData.slice(-5).reduce((sum, d) => sum + d.volume, 0) / 5;
-                const prevVolumeAvg = historicalData.slice(-10, -5).reduce((sum, d) => sum + d.volume, 0) / 5;
-                const volumeTrend = recentVolumeAvg > prevVolumeAvg ? 'Aumentando (Bullish)' : 'Disminuyendo (Bearish)';
-                document.getElementById('volume-trend').innerText = `Tendencia de Volumen: ${volumeTrend}`;
+          <div class="mt20 small" style="opacity:.8">
+            Reglas (demo):
+            <ul>
+              <li>COMPRAR si SMA corta cruza sobre SMA larga y el precio rebota entre 38.2%–61.8% con ATR &gt; umbral.</li>
+              <li>VENDER si SMA corta cruza por debajo y el precio cerca de 61.8%–78.6% o pérdida de momentum.</li>
+              <li>Objetivos estimados: último swing alto/bajo ± 1×ATR.</li>
+            </ul>
+          </div>
 
-                // Niveles Fibonacci basados en high/low de los últimos 24 datos (~24 horas)
-                const recentData = historicalData.slice(-24);
-                const recentHigh = Math.max(...recentData.map(d => d.high));
-                const recentLow = Math.min(...recentData.map(d => d.low));
-                const fib = calculateFibLevels(recentHigh, recentLow);
+          <div class="footer">No es asesoramiento financiero. Uso educativo.</div>
+        </div>
+      </div>
+    </section>
+  </main>
 
-                // Lógica de señal usando precio actual
-                let signal = 'MANTENER';
-                let advice = '';
-                if (lastRSI < 30 && currentPrice > fib[0.618]) {
-                    signal = 'COMPRAR';
-                    advice = `Tendencia alcista. Compra alrededor de $${(currentPrice - lastATR).toFixed(6)} (soporte ATR). Objetivo: $${(currentPrice + 2 * lastATR).toFixed(6)}. Nivel Fib soporte: $${fib[0.618].toFixed(6)}.`;
-                } else if (lastRSI > 70 && currentPrice < fib[0.382]) {
-                    signal = 'VENDER';
-                    advice = `Tendencia bajista. Vende alrededor de $${(currentPrice + lastATR).toFixed(6)} (resistencia ATR). Stop: $${(currentPrice - 2 * lastATR).toFixed(6)}. Nivel Fib resistencia: $${fib[0.382].toFixed(6)}.`;
-                } else {
-                    advice = 'Mantén posición. Monitorea para cambios en RSI o ruptura de niveles Fib.';
-                }
+  <audio id="beep" preload="auto">
+    <source src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAAA" type="audio/wav">
+  </audio>
 
-                const signalElem = document.getElementById('signal');
-                signalElem.innerText = signal;
-                signalElem.className = signal === 'COMPRAR' ? 'buy' : signal === 'VENDER' ? 'sell' : '';
+  <script>
+  // ================== UTILIDADES ==================
+  const fmt = (n, d=4) => (n==null||isNaN(n))? '—' : Number(n).toLocaleString('en-US',{maximumFractionDigits:d});
+  const nowStr = () => new Date().toLocaleTimeString();
+  const clamp = (v,a,b)=> Math.min(b, Math.max(a,v));
 
-                document.getElementById('advice').innerText = advice;
+  // ================== DATA STATE ==================
+  const state = {
+    timer: null,
+    periodMs: 60_000, // 60s
+    points: [], // {t, price}
+    candles: [], // OHLCV de 1m sintetizado a partir de ticks (simple)
+    lastCandle: null,
+    smaShort: 5,
+    smaLong: 20,
+    fibWindowMin: 60,
+    atrLen: 14,
+    lastSignal: 'ESPERAR',
+    provider: 'coingecko',
+    assetId: 'supra',
+    fiat: 'usd',
+    simulatePrice: 0.01 + Math.random()*0.02,
+  };
 
-                // Notificación
-                if (signal !== currentSignal && signal !== 'MANTENER') {
-                    alert(`¡Señal de ${signal}! ${advice}`);
-                    // Para sonido: new Audio('alert.mp3').play(); (requiere archivo local)
-                }
-                currentSignal = signal;
+  function setModeBadge(text){
+    document.getElementById('modeBadge').innerHTML = 'Modo: <strong>'+text+'</strong>';
+  }
 
-                // Actualizar gráfico con datos históricos
-                updateChart(historicalData, fib, currentPrice);
+  // ================== FETCHERS ==================
+  async function fetchPrice(){
+    const prov = state.provider;
+    const id = state.assetId.trim();
+    const vs = state.fiat;
 
-            } catch (error) {
-                console.error(error);
-                document.getElementById('signal').innerText = 'Error al cargar datos';
-                document.getElementById('error').innerText = `Detalles del error: ${error.message}. Intenta de nuevo más tarde.`;
-            }
+    try{
+      if(prov === 'coingecko'){
+        // https://api.coingecko.com/api/v3/simple/price?ids=supra&vs_currencies=usd
+        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=${encodeURIComponent(vs)}`;
+        const r = await fetch(url, { cache: 'no-store' });
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const j = await r.json();
+        const p = j?.[id]?.[vs];
+        if(typeof p === 'number') return p;
+        throw new Error('ID no encontrado en CoinGecko');
+      }
+      if(prov === 'coingecko_markets'){
+        // markets endpoint (para más info si hiciera falta)
+        // https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=supra
+        const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${encodeURIComponent(vs)}&ids=${encodeURIComponent(id)}`;
+        const r = await fetch(url, { cache: 'no-store' });
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const j = await r.json();
+        const p = j?.[0]?.current_price;
+        if(typeof p === 'number') return p;
+        throw new Error('ID no encontrado (markets)');
+      }
+      if(prov === 'simulate'){
+        // random walk suave
+        const drift = 0.0000;
+        const vol = 0.03; // 3%
+        const rnd = (Math.random() - .5) * vol;
+        state.simulatePrice = Math.max(0.00001, state.simulatePrice * (1 + drift + rnd));
+        return state.simulatePrice;
+      }
+      throw new Error('Proveedor no soportado');
+    }catch(err){
+      console.warn('Fallo fetch, entrando en modo simulado:', err.message);
+      setModeBadge('Simulación (fallback)');
+      state.provider = 'simulate';
+      return fetchPrice();
+    }
+  }
+
+  // ================== INDICADORES ==================
+  function SMA(arr, len){
+    if(arr.length < len) return Array(arr.length).fill(null);
+    const out = Array(arr.length).fill(null);
+    let sum=0; for(let i=0;i<arr.length;i++){ sum += arr[i]; if(i>=len) sum -= arr[i-len]; if(i>=len-1) out[i]=sum/len; }
+    return out;
+  }
+
+  function buildCandlesFromPoints(points){
+    // Agrupa por minuto (floor)
+    const groups = new Map();
+    for(const {t, price} of points){
+      const key = Math.floor(t/60000)*60000; // inicio de minuto
+      const g = groups.get(key) || [];
+      g.push(price);
+      groups.set(key, g);
+    }
+    const candles = [];
+    for(const [ts, prices] of Array.from(groups.entries()).sort((a,b)=>a[0]-b[0])){
+      const open = prices[0], close = prices[prices.length-1];
+      const high = Math.max(...prices), low = Math.min(...prices);
+      candles.push({t: ts, o: open, h: high, l: low, c: close});
+    }
+    return candles;
+  }
+
+  function ATR(candles, len){
+    // True Range: max(h-l, |h-prevClose|, |l-prevClose|)
+    const out = Array(candles.length).fill(null);
+    for(let i=1;i<candles.length;i++){
+      const cur = candles[i], prev = candles[i-1];
+      const tr = Math.max(cur.h-cur.l, Math.abs(cur.h - prev.c), Math.abs(cur.l - prev.c));
+      out[i] = tr;
+    }
+    // SMA de TR
+    return SMA(out.map(x=> x ?? 0), len);
+  }
+
+  function fibRetracements(candles, minutes){
+    if(candles.length === 0) return null;
+    const now = candles[candles.length-1].t;
+    const fromTs = now - minutes*60_000;
+    const window = candles.filter(c=> c.t >= fromTs);
+    if(window.length < 2) return null;
+    const swingHigh = Math.max(...window.map(c=>c.h));
+    const swingLow  = Math.min(...window.map(c=>c.l));
+    const range = swingHigh - swingLow;
+    const levels = [0.236, 0.382, 0.5, 0.618, 0.786].map(r => swingHigh - r*range);
+    return { swingHigh, swingLow, range, levels };
+  }
+
+  function crossover(prevShort, prevLong, curShort, curLong){
+    if(prevShort == null || prevLong == null || curShort == null || curLong == null) return null;
+    if(prevShort < prevLong && curShort > curLong) return 'bull';
+    if(prevShort > prevLong && curShort < curLong) return 'bear';
+    return null;
+  }
+
+  // ================== SEÑALES ==================
+  function generateSignal(ctx){
+    const prices = state.points.map(p=>p.price);
+    const times = state.points.map(p=>p.t);
+    if(prices.length < Math.max(state.smaShort, state.smaLong)+2) return {action:'ESPERAR'};
+
+    const smaS = SMA(prices, state.smaShort);
+    const smaL = SMA(prices, state.smaLong);
+
+    const prev = prices.length-2, cur = prices.length-1;
+    const x = crossover(smaS[prev], smaL[prev], smaS[cur], smaL[cur]);
+
+    // Candles + ATR
+    const candles = state.candles;
+    const atrArr = ATR(candles, state.atrLen);
+    const atr = atrArr[atrArr.length-1];
+
+    const fib = fibRetracements(candles, state.fibWindowMin);
+
+    // heurística simple
+    let action = 'ESPERAR', reason = 'Sin confirmación', target=null, stop=null;
+    const P = prices[cur];
+    if(fib){
+      const [L236,L382,L50,L618,L786] = fib.levels;
+      const near = (lvl)=> Math.abs(P-lvl) <= (atr ?? 0) * 0.6;
+
+      if(x==='bull' && (near(L382)||near(L618)||near(L50)) && (atr ?? 0) > 0){
+        action = 'COMPRAR';
+        reason = 'Cruce alcista + rebote en zona 38–62% + ATR positivo';
+        target = fib.swingHigh + (atr??0);
+        stop = fib.swingLow - (atr??0)*0.5;
+      } else if(x==='bear' && (near(L618)||near(L786)||P>fib.swingHigh) && (atr ?? 0) > 0){
+        action = 'VENDER';
+        reason = 'Cruce bajista + zona 62–78% o sobre-extensión';
+        target = fib.swingLow - (atr??0);
+        stop = fib.swingHigh + (atr??0)*0.5;
+      }
+    }
+
+    const change60 = (prices.length>60)? ((P - prices[prices.length-61]) / prices[prices.length-61]) : null;
+
+    return {action, reason, target, stop, price:P, change60, atr, fib};
+  }
+
+  // ================== CHART ==================
+  let chart;
+  const fibLines = [];
+  function initChart(){
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    if(chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type:'line',
+      data:{ labels: [], datasets: [
+        { label:'Precio', data:[], borderWidth:2, pointRadius:0 },
+        { label:'SMA corta', data:[], borderWidth:1.5, pointRadius:0 },
+        { label:'SMA larga', data:[], borderWidth:1.5, pointRadius:0 },
+      ]},
+      options:{
+        responsive:true,
+        interaction:{mode:'index', intersect:false},
+        maintainAspectRatio:false,
+        plugins:{
+          legend:{labels:{color:'#cfd2ff'}},
+          tooltip:{enabled:true},
+        },
+        scales:{
+          x:{ticks:{color:'#9aa0c3'}},
+          y:{ticks:{color:'#9aa0c3'}, grid:{color:'rgba(255,255,255,.08)'}},
         }
+      }
+    });
+  }
 
-        function calculateATR(data, period) {
-            if (data.length < period + 1) return [0]; // Datos insuficientes
-            const tr = [];
-            for (let i = 1; i < data.length; i++) {
-                const highLow = data[i].high - data[i].low;
-                const highClose = Math.abs(data[i].high - data[i - 1].close);
-                const lowClose = Math.abs(data[i].low - data[i - 1].close);
-                tr.push(Math.max(highLow, highClose, lowClose));
-            }
-            let atr = tr.slice(0, period).reduce((a, b) => a + b, 0) / period;
-            const atrArray = new Array(data.length - tr.length).fill(0).concat([atr]);
-            for (let i = period; i < tr.length; i++) {
-                atr = (atr * (period - 1) + tr[i]) / period;
-                atrArray.push(atr);
-            }
-            return atrArray;
-        }
+  function updateChart(){
+    if(!chart) return;
+    const labels = state.points.map(p=> new Date(p.t).toLocaleTimeString());
+    const prices = state.points.map(p=> p.price);
+    const smaS = SMA(prices, state.smaShort);
+    const smaL = SMA(prices, state.smaLong);
 
-        function calculateRSI(closes, period) {
-            if (closes.length < period + 1) return [50]; // Neutral si datos insuficientes
-            const gains = [], losses = [];
-            for (let i = 1; i < closes.length; i++) {
-                const diff = closes[i] - closes[i - 1];
-                if (diff > 0) gains.push(diff); else losses.push(Math.abs(diff));
-            }
-            let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
-            let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
-            let rs = avgLoss ? avgGain / avgLoss : Infinity;
-            let rsiValue = 100 - 100 / (1 + rs);
-            const rsiArray = new Array(closes.length - gains.length - 1).fill(50).concat([rsiValue]);
-            for (let i = period; i < gains.length; i++) {
-                avgGain = (avgGain * (period - 1) + (gains[i] || 0)) / period;
-                avgLoss = (avgLoss * (period - 1) + (losses[i] || 0)) / period;
-                rs = avgLoss ? avgGain / avgLoss : Infinity;
-                rsiValue = 100 - 100 / (1 + rs);
-                rsiArray.push(rsiValue);
-            }
-            return rsiArray;
-        }
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = prices;
+    chart.data.datasets[1].data = smaS;
+    chart.data.datasets[2].data = smaL;
 
-        function calculateFibLevels(high, low) {
-            const diff = high - low;
-            return fibLevels.reduce((acc, level) => {
-                acc[level] = high - level * diff;
-                return acc;
-            }, {});
-        }
+    // Dibujar líneas de Fibonacci como anotaciones "manuales" usando plugin scriptable
+    const yAxis = chart.scales.y;
+    fibLines.length = 0;
+    const fib = fibRetracements(state.candles, state.fibWindowMin);
+    if(fib && yAxis){
+      const [L236,L382,L50,L618,L786] = fib.levels;
+      const levels = [
+        {y:L236, label:'23.6%'},
+        {y:L382, label:'38.2%'},
+        {y:L50,  label:'50%'},
+        {y:L618, label:'61.8%'},
+        {y:L786, label:'78.6%'}
+      ];
+      chart.options.plugins.annotation = {
+        annotations: Object.fromEntries(levels.map((lvl,i)=> [
+          'fib'+i, {
+            type:'line', yMin:lvl.y, yMax:lvl.y,
+            borderColor: i===3? '#e21b4a' : 'rgba(255,255,255,.25)',
+            borderWidth: i===3? 2 : 1,
+            label:{display:true, content:lvl.label, color:'#cfd2ff', backgroundColor:'rgba(0,0,0,.5)'}
+          }
+        ]))
+      };
+      document.getElementById('fibLevels').textContent = levels.map(l=> `${l.label}: ${fmt(l.y,6)}`).join(' · ');
+    }
 
-        function updateChart(data, fib, currentPrice) {
-            const labels = data.map(d => d.timestamp.toLocaleString('es-ES', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }));
-            const prices = data.map(d => d.close);
+    chart.update('none');
+  }
 
-            if (!chart) {
-                const ctx = document.getElementById('priceChart').getContext('2d');
-                chart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Precio SUPRA (USD)',
-                            data: prices,
-                            borderColor: '#6a00ff',
-                            backgroundColor: 'rgba(106, 0, 255, 0.1)',
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: { beginAtZero: false }
-                        },
-                        plugins: {
-                            annotation: {
-                                annotations: Object.entries(fib).map(([level, value]) => ({
-                                    type: 'line',
-                                    yMin: value,
-                                    yMax: value,
-                                    borderColor: '#00ff00',
-                                    borderWidth: 1,
-                                    label: {
-                                        content: `${(level * 100).toFixed(1)}% Fib`,
-                                        enabled: true,
-                                        position: 'start'
-                                    }
-                                }))
-                            }
-                        }
-                    }
-                });
-            } else {
-                chart.data.labels = labels;
-                chart.data.datasets[0].data = prices;
-                chart.options.plugins.annotation.annotations = Object.entries(fib).map(([level, value]) => ({
-                    type: 'line',
-                    yMin: value,
-                    yMax: value,
-                    borderColor: '#00ff00',
-                    borderWidth: 1,
-                    label: {
-                        content: `${(level * 100).toFixed(1)}% Fib`,
-                        enabled: true,
-                        position: 'start'
-                    }
-                }));
-                chart.update();
-            }
-        }
+  // ================== RENDER ==================
+  function renderSignal(sig){
+    const pill = document.getElementById('signalPill');
+    pill.className = 'pill ' + (sig.action==='COMPRAR'?'buy': sig.action==='VENDER'?'sell':'wait');
+    pill.textContent = sig.action;
 
-        // Inicializar
-        fetchData();
-        setInterval(fetchData, 60000); // Cada 60 segundos
+    document.getElementById('price').textContent = fmt(sig.price, 8);
+    document.getElementById('atr').textContent = fmt(sig.atr, 6);
+    document.getElementById('chg').textContent = (sig.change60==null? '—' : ((sig.change60*100).toFixed(2)+'%'));
 
-        document.getElementById('refresh').addEventListener('click', fetchData);
-    </script>
-    <p>0.3</p>
+    const lu = document.getElementById('lastUpdate');
+    let extra = '';
+    if(sig.target){ extra += ` · Objetivo: ${fmt(sig.target,6)}`; }
+    if(sig.stop){ extra += ` · Stop: ${fmt(sig.stop,6)}`; }
+    lu.textContent = `${nowStr()} — ${sig.reason}${extra}`;
+
+    // alertas
+    if(sig.action !== state.lastSignal){
+      if(sig.action==='COMPRAR' || sig.action==='VENDER'){
+        try{ document.getElementById('beep').play(); }catch(e){}
+        alert(`${sig.action} — ${sig.reason}`);
+      }
+      state.lastSignal = sig.action;
+    }
+  }
+
+  // ================== LOOP ==================
+  async function tick(){
+    const price = await fetchPrice();
+    const t = Date.now();
+    state.points.push({t, price});
+    // mantener últimos 24h de puntos por si dejas abierto (1440 puntos a 1m)
+    if(state.points.length > 1440) state.points.shift();
+
+    state.candles = buildCandlesFromPoints(state.points);
+
+    updateChart();
+    const sig = generateSignal();
+    renderSignal(sig);
+  }
+
+  function start(){
+    if(state.timer) return;
+    tick();
+    state.timer = setInterval(tick, state.periodMs);
+  }
+  function stop(){ if(state.timer){ clearInterval(state.timer); state.timer=null; } }
+
+  // ================== UI BINDINGS ==================
+  function bindUi(){
+    const $ = (id)=> document.getElementById(id);
+    $('startBtn').onclick = start;
+    $('stopBtn').onclick = stop;
+    $('resetBtn').onclick = ()=>{ state.points.length=0; state.candles.length=0; state.lastSignal='ESPERAR'; updateChart(); renderSignal({action:'ESPERAR', price:null, atr:null, change60:null, reason:'reiniciado'}); };
+
+    $('provider').onchange = (e)=>{ state.provider = e.target.value; setModeBadge(state.provider==='simulate'?'Simulación':'Tiempo real'); };
+    $('assetId').onchange = (e)=> state.assetId = e.target.value;
+    $('fiat').onchange = (e)=> state.fiat = e.target.value;
+
+    $('smaShort').onchange = (e)=> state.smaShort = Math.max(2, parseInt(e.target.value||5));
+    $('smaLong').onchange = (e)=> state.smaLong = Math.max(3, parseInt(e.target.value||20));
+    $('fibWindow').onchange = (e)=> state.fibWindowMin = Math.max(10, parseInt(e.target.value||60));
+    $('atrLen').onchange = (e)=> state.atrLen = Math.max(5, parseInt(e.target.value||14));
+  }
+
+  // ================== ARRANQUE ==================
+  initChart();
+  bindUi();
+  // Auto-start
+  start();
+  </script>
 </body>
 </html>
