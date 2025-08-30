@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Supra</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.1"></script>
+    <style>
+        body {
+            background-color: #000000; /* Fondo oscuro como sitios Web3 */
+            color: #ffffff;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #ffffff;
+        }
+        #signal {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .buy {
+            color: #00ff00; /* Verde para comprar */
+        }
+        .sell {
+            color: #ff0000; /* Rojo para vender */
+        }
+        #price {
+            font-size: 1.5em;
+            margin: 10px 0;
+        }
+        #advice {
+            font-size: 1.2em;
+            margin: 20px 0;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #chart-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #1a1a1a;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        button {
+            background-color: #6a00ff; /* Morado acento inspirado en Supra */
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #8b3aff;
+        }
+        #rsi, #atr, #volume-trend {
+            font-size: 1.1em;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Análisis de Supra</h1>
+    <div id="signal">Cargando datos...</div>
+    <div id="price"></div>
+    <div id="advice"></div>
+    <div id="rsi"></div>
+    <div id="atr"></div>
+    <div id="volume-trend"></div>
+    <div id="chart-container">
+        <canvas id="priceChart"></canvas>
+    </div>
+    <button id="refresh">Actualizar Ahora</button>
+
+    <script>
+        let chart;
+        let historicalData = [];
+        let currentSignal = '';
+        const interval = '5m'; // Intervalo de 5 minutos para datos históricos
+        const limit = 200; // Últimos 200 periodos (~16 horas para 5m)
+        const atrPeriod = 14;
+        const rsiPeriod = 14;
+        const fibLevels = [0, 0.236, 0.382, 0.5, 0.618, 1];
+
+        async function fetchData() {
+            try {
+                // Fetch OHLC data from Gate.io API
+                const response = await fetch(`https://api.gateio.ws/api/v4/spot/candles?currency_pair=SUPRA_USDT&interval=${interval}&limit=${limit}`);
+                const data = await response.json();
+                historicalData = data.map(candle => ({
+                    timestamp: new Date(candle[0] * 1000),
+                    open: parseFloat(candle[5]),
+                    high: parseFloat(candle[3]),
+                    low: parseFloat(candle[4]),
+                    close: parseFloat(candle[2]),
+                    volume: parseFloat(candle[1])
+                })).reverse(); // Reverse to have oldest first
+
+                if (historicalData.length === 0) throw new Error('No data');
+
+                const currentPrice = historicalData[historicalData.length - 1].close;
+                document.getElementById('price').innerText = `Precio actual: $${currentPrice.toFixed(6)} USD`;
+
+                // Calcular indicadores
+                const atr = calculateATR(historicalData, atrPeriod);
+                const lastATR = atr[atr.length - 1];
+                document.getElementById('atr').innerText = `ATR (14): ${lastATR.toFixed(6)} (Medida de volatilidad)`;
+
+                const rsi = calculateRSI(historicalData.map(d => d.close), rsiPeriod);
+                const lastRSI = rsi[rsi.length - 1];
+                document.getElementById('rsi').innerText = `RSI (14): ${lastRSI.toFixed(2)} (Sobrevendido si <30, Sobrecomprado si >70)`;
+
+                // Tendencia de volumen: promedio de últimos 5 vs anteriores
+                const recentVolumeAvg = historicalData.slice(-5).reduce((sum, d) => sum + d.volume, 0) / 5;
+                const prevVolumeAvg = historicalData.slice(-10, -5).reduce((sum, d) => sum + d.volume, 0) / 5;
+                const volumeTrend = recentVolumeAvg > prevVolumeAvg ? 'Aumentando (Bullish)' : 'Disminuyendo (Bearish)';
+                document.getElementById('volume-trend').innerText = `Tendencia de Volumen: ${volumeTrend}`;
+
+                // Calcular niveles Fibonacci basados en high/low reciente
+                const recentHigh = Math.max(...historicalData.slice(-50).map(d => d.high)); // Últimos ~4 horas
+                const recentLow = Math.min(...historicalData.slice(-50).map(d => d.low));
+                const fib = calculateFibLevels(recentHigh, recentLow);
+
+                // Lógica simple para señal: combinación de RSI, precio vs Fib 50%, y tendencia
+                let signal = 'MANTENER';
+                let advice = '';
+                if (lastRSI < 30 && currentPrice > fib[0.618]) {
+                    signal = 'COMPRAR';
+                    advice = `Tendencia alcista. Compra alrededor de $${(currentPrice - lastATR).toFixed(6)} (soporte ATR). Objetivo: $${(currentPrice + 2 * lastATR).toFixed(6)}. Nivel Fib soporte: $${fib[0.618].toFixed(6)}.`;
+                } else if (lastRSI > 70 && currentPrice < fib[0.382]) {
+                    signal = 'VENDER';
+                    advice = `Tendencia bajista. Vende alrededor de $${(currentPrice + lastATR).toFixed(6)} (resistencia ATR). Stop: $${(currentPrice - 2 * lastATR).toFixed(6)}. Nivel Fib resistencia: $${fib[0.382].toFixed(6)}.`;
+                } else {
+                    advice = 'Mantén posición. Monitorea para cambios en RSI o ruptura de niveles Fib.';
+                }
+
+                const signalElem = document.getElementById('signal');
+                signalElem.innerText = signal;
+                signalElem.className = signal === 'COMPRAR' ? 'buy' : signal === 'VENDER' ? 'sell' : '';
+
+                document.getElementById('advice').innerText = advice;
+
+                // Notificación si señal cambia
+                if (signal !== currentSignal && signal !== 'MANTENER') {
+                    alert(`¡Señal de ${signal}! ${advice}`);
+                    // Para sonido, agregar: new Audio('alert.mp3').play(); (necesita archivo)
+                }
+                currentSignal = signal;
+
+                // Actualizar gráfico
+                updateChart(historicalData, fib);
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('signal').innerText = 'Error al cargar datos';
+            }
+        }
+
+        function calculateATR(data, period) {
+            const tr = [];
+            for (let i = 1; i < data.length; i++) {
+                const highLow = data[i].high - data[i].low;
+                const highClose = Math.abs(data[i].high - data[i - 1].close);
+                const lowClose = Math.abs(data[i].low - data[i - 1].close);
+                tr.push(Math.max(highLow, highClose, lowClose));
+            }
+            let atr = tr.slice(0, period).reduce((a, b) => a + b, 0) / period;
+            const atrArray = new Array(data.length - tr.length).fill(0).concat([atr]);
+            for (let i = period; i < tr.length; i++) {
+                atr = (atr * (period - 1) + tr[i]) / period;
+                atrArray.push(atr);
+            }
+            return atrArray;
+        }
+
+        function calculateRSI(closes, period) {
+            const gains = [], losses = [];
+            for (let i = 1; i < closes.length; i++) {
+                const diff = closes[i] - closes[i - 1];
+                if (diff > 0) gains.push(diff); else losses.push(Math.abs(diff));
+            }
+            let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
+            let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
+            let rs = avgGain / avgLoss;
+            const rsiArray = new Array(closes.length - gains.length - 1).fill(0).concat([100 - 100 / (1 + rs)]);
+            for (let i = period; i < gains.length; i++) {
+                avgGain = (avgGain * (period - 1) + (gains[i] || 0)) / period;
+                avgLoss = (avgLoss * (period - 1) + (losses[i] || 0)) / period;
+                rs = avgGain / avgLoss;
+                rsiArray.push(100 - 100 / (1 + rs));
+            }
+            return rsiArray;
+        }
+
+        function calculateFibLevels(high, low) {
+            const diff = high - low;
+            return fibLevels.reduce((acc, level) => {
+                acc[level] = high - level * diff;
+                return acc;
+            }, {});
+        }
+
+        function updateChart(data, fib) {
+            const labels = data.map(d => d.timestamp.toLocaleTimeString());
+            const prices = data.map(d => d.close);
+
+            if (!chart) {
+                const ctx = document.getElementById('priceChart').getContext('2d');
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Precio SUPRA',
+                            data: prices,
+                            borderColor: '#6a00ff',
+                            backgroundColor: 'rgba(106, 0, 255, 0.1)',
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: false }
+                        },
+                        plugins: {
+                            annotation: {
+                                annotations: Object.entries(fib).map(([level, value]) => ({
+                                    type: 'line',
+                                    yMin: value,
+                                    yMax: value,
+                                    borderColor: '#00ff00',
+                                    borderWidth: 1,
+                                    label: {
+                                        content: `${(level * 100).toFixed(1)}%`,
+                                        enabled: true,
+                                        position: 'start'
+                                    }
+                                }))
+                            }
+                        }
+                    }
+                });
+            } else {
+                chart.data.labels = labels;
+                chart.data.datasets[0].data = prices;
+                chart.options.plugins.annotation.annotations = Object.entries(fib).map(([level, value]) => ({
+                    type: 'line',
+                    yMin: value,
+                    yMax: value,
+                    borderColor: '#00ff00',
+                    borderWidth: 1,
+                    label: {
+                        content: `${(level * 100).toFixed(1)}%`,
+                        enabled: true,
+                        position: 'start'
+                    }
+                }));
+                chart.update();
+            }
+        }
+
+        // Inicializar
+        fetchData();
+        setInterval(fetchData, 60000); // Cada 60 segundos
+
+        document.getElementById('refresh').addEventListener('click', fetchData);
+    </script>
+</body>
+</html>
